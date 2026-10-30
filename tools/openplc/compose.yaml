@@ -1,0 +1,18 @@
+# Local OpenPLC v3 runtime for simulation. Never point the CLI at a PLC on a machine.
+name: openplc
+
+services:
+  runtime:
+    build:
+      context: https://github.com/thiagoralves/OpenPLC_v3.git#b5d41356dab4aeadca0dd7ca64ba542f870b595d
+    image: openplc-v3:b5d4135
+    container_name: openplc-runtime
+    privileged: true
+    ports:
+      - "127.0.0.1:8080:8080"   # web UI, login openplc / openplc
+      - "127.0.0.1:5020:502"    # Modbus TCP
+    volumes:
+      - openplc-data:/docker_persistent
+
+volumes:
+  openplc-data:

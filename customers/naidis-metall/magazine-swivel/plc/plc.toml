@@ -1,0 +1,8 @@
+# Build targets: the sources of each are concatenated in this order into build/<target>.st
+spec = "../spec.md"
+
+[targets.sim]
+sources = ["src/station.st", "src/plant_sim.st", "targets/sim.st"]
+
+[targets.hw]
+sources = ["src/station.st", "targets/hw.st"]

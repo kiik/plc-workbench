@@ -1,0 +1,4 @@
+# Build targets: the sources of each are concatenated in this order into build/<target>.st
+
+[targets.sim]
+sources = ["src/blinker.st"]
