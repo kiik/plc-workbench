@@ -15,6 +15,7 @@ CONFIGURATION Config0
         SWV_AtPickup AT %IX1.4 : BOOL;        (* 3S1 XMA2.I4 *)
         SWV_AtDropdown AT %IX1.5 : BOOL;      (* 3S2 XMA2.I5 *)
         MAG_PickupOccupied AT %IX1.6 : BOOL;  (* 1S3 XMA2.I6 *)
+        LNK_NextReady : BOOL := FALSE;        (* 4S1 address ?: waits in S5 until wired *)
         PNL_StartLamp AT %QX0.0 : BOOL;       (* 0H1 PNL2.I0 *)
         PNL_ResetLamp AT %QX0.1 : BOOL;       (* 0H2 PNL2.I1 *)
         PNL_LampQ1 AT %QX0.2 : BOOL;          (* 0H3 PNL2.I2 *)

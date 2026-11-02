@@ -5,6 +5,7 @@
      coils %QX2.x  sensors, written by PlantSim; bit = XMA2 terminal I<n>
      coils %QX3.x  panel buttons, written by the operator; bit = PNL2 terminal O<n>
      coils %QX4.x  fault injection
+     coils %QX5.x  line link: sorter ready, written by PlantSim (hw address ?)
      holding %QW0..3  step number, parts in magazine (writable), delivered, lost *)
 
 CONFIGURATION Config0
@@ -31,6 +32,8 @@ CONFIGURATION Config0
         PNL_EStopOk AT %QX3.4 : BOOL := TRUE;   (* hw address unknown, spec 0S5 *)
         SIM_VacuumFault AT %QX4.0 : BOOL;
         SIM_SwivelJam AT %QX4.1 : BOOL;
+        SIM_SorterBlocked AT %QX4.2 : BOOL;
+        LNK_NextReady AT %QX5.0 : BOOL;
         StepNo AT %QW0 : INT;
         SIM_PartsInMagazine AT %QW1 : INT := 5;
         SIM_PartsDelivered AT %QW2 : INT;

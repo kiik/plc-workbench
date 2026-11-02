@@ -1,7 +1,8 @@
 # Working in this repo
 
 Read the [README](README.md) first, then the guide for what you change: [spec](docs/spec-guide.md),
-[PLC](docs/plc-guide.md) or [plan](docs/plan-guide.md).
+[electrical](docs/electrical-guide.md), [line](docs/line-guide.md), [PLC](docs/plc-guide.md) or
+[plan](docs/plan-guide.md).
 
 ## Commits
 

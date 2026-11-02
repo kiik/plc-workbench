@@ -2,7 +2,8 @@
 
 How to plan a project: one folder per project on a machine,
 `customers/<customer>/<machine>/projects/<YYYY-MM-DD>-<project>/`, dated by the day the work
-started, holding `plan.md` and what only this project needs (site photos, checklists). The spec
+started, holding `plan.md` and what only this project needs: site photos, and the records its
+activities fill in (a commissioning record, a fault log), written blank before the day. The spec
 says what the machine does and outlives the project ([spec guide](spec-guide.md)); the plan says
 why, who does what by when, and what can go wrong on the way, and is closed when the project ends.
 Example: [`first-install`](../customers/naidis-metall/magazine-swivel/projects/2026-10-29-first-install/plan.md).
@@ -38,7 +39,7 @@ Example: [`first-install`](../customers/naidis-metall/magazine-swivel/projects/2
 | 5 | Constraints | What the plan must work around: site, existing equipment, production windows |
 | 6 | Activities | Per phase: description, `\| Activity \| Owner \| NLT \|`, prerequisites, end result |
 | 7 | Risks | Per risk: description, likelihood, impact, mitigable (fully, partly, no), countermeasures |
-| 8 | Retrospective | Written after handover: the questions below, answered |
+| 8 | Retrospective | Written after handover: the questions below, answered; activities not done; feedback per role |
 
 Title: `# <Station name>: project plan`, then a status line: `Status: planning`,
 `Status: in progress` or `Status: closed <date>`.
@@ -50,3 +51,6 @@ Title: `# <Station name>: project plan`, then a status line: `Status: planning`,
 3. Was the plan right? What should it have done differently, and why?
 4. What to repeat and what to avoid next time, and in which situations?
 5. Guidelines for the next plan. A guideline that applies to every project goes into this guide.
+
+Then the activities not done ([rule 9](#rules)), and each team member's own short account: what
+went well, what was hard, what they would change.

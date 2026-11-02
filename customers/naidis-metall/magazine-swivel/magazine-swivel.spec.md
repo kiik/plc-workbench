@@ -10,6 +10,7 @@ Status: draft
 | MAG | Magazine | Detailimagasin | 1 |
 | GRP | Vacuum gripper | | 2 |
 | SWV | Swivel cylinder | Pöördsilinder | 3 |
+| LNK | Line link to the colour sorter | | 4 |
 
 ## 2. Components
 
@@ -48,6 +49,7 @@ Status: draft
 | 3S1 | XMA2.I4 | input | `SWV_AtPickup` | Swivel: 1 = at pickup |
 | 3S2 | XMA2.I5 | input | `SWV_AtDropdown` | Swivel: 1 = at dropdown |
 | 1S3 | XMA2.I6 | input | `MAG_PickupOccupied` | Pickup position: 1 = part present |
+| 4S1 | ? | input | `LNK_NextReady` | IR receiver from the colour sorter: 1 = sorter can take a part |
 | 1Y1A | XMA2.O0 | output | `MAG_CylRetract` | Magazine cylinder valve: 1 = retract |
 | 2Y1A | XMA2.O1 | output | `GRP_Grip` | Gripper valve: 1 = vacuum on |
 | 2Y1B | XMA2.O2 | output | `GRP_Release` | Gripper valve: 1 = vacuum off |
@@ -59,7 +61,7 @@ Status: draft
 - Home = `MAG_CylExtended` and `SWV_AtDropdown`.
 - Power-up: Home → S0, else S90.
 - Emergency stop (`PNL_EStopOk` = 0), from any step → S90: the PLC switches all coils off.
-- Stop (`PNL_StopReleased` = 0) sets StopReq: the cycle finishes, then S0. S0 and S8 clear StopReq.
+- Stop (`PNL_StopReleased` = 0) sets StopReq: the cycle finishes, then S0. S0 and S9 clear StopReq.
 - Auto (`PNL_Manual` = 0) repeats the cycle; manual runs one cycle per Start.
 
 | Output | Only while | Prevents |
@@ -74,30 +76,48 @@ Status: draft
 | `S92_HomeVacuumOff` | `GRP_Release`, `SWV_ToDropdown`, `PNL_LampQ1`, `PNL_LampQ2`, `PNL_ResetLamp` | 50 ms and Home → S0 | 3 s |
 | `S0_Ready` | `PNL_StartLamp` (blink) | not Home → S90; Start↑ and `PNL_StopReleased` → S3 if `MAG_PickupOccupied`, else S1 | — |
 | `S1_MagRetract` | `MAG_CylRetract`, `PNL_StartLamp` | `MAG_CylRetracted` → S2 | 3 s |
-| `S2_MagPushOut` | `PNL_StartLamp` | `MAG_CylExtended` → S3 if `MAG_PickupOccupied`, else S8 | 3 s |
+| `S2_MagPushOut` | `PNL_StartLamp` | `MAG_CylExtended` → S3 if `MAG_PickupOccupied`, else S9 | 3 s |
 | `S3_SwvToPickup` | `SWV_ToPickup`, `PNL_StartLamp` | `SWV_AtPickup` → S4 | 3 s |
 | `S4_VacuumOn` | `GRP_Grip`, `SWV_ToPickup`, `PNL_StartLamp` | `GRP_PartGripped` → S5 | 3 s (part not gripped) |
-| `S5_SwvToDropdown` | `GRP_Grip`, `SWV_ToDropdown`, `PNL_StartLamp` | not `GRP_PartGripped` → S99 (part lost); `SWV_AtDropdown` → S6 | 3 s |
-| `S6_VacuumOff` | `GRP_Release`, `SWV_ToDropdown`, `PNL_StartLamp` | 50 ms → S7 | — |
-| `S7_CycleEnd` | `PNL_StartLamp` | StopReq or `PNL_Manual` → S0, else S1 | — |
-| `S8_MagEmpty` | `PNL_LampQ2` (blink), `PNL_StartLamp` (blink) | not Home → S90; Start↑ and `PNL_StopReleased` → S1 | — |
+| `S5_WaitNextReady` | `GRP_Grip`, `SWV_ToPickup`, `PNL_StartLamp` | not `GRP_PartGripped` → S99 (part lost); `LNK_NextReady` → S6 | — |
+| `S6_SwvToDropdown` | `GRP_Grip`, `SWV_ToDropdown`, `PNL_StartLamp` | not `GRP_PartGripped` → S99 (part lost); `SWV_AtDropdown` → S7 | 3 s |
+| `S7_VacuumOff` | `GRP_Release`, `SWV_ToDropdown`, `PNL_StartLamp` | 50 ms → S8 | — |
+| `S8_CycleEnd` | `PNL_StartLamp` | StopReq or `PNL_Manual` → S0, else S1 | — |
+| `S9_MagEmpty` | `PNL_LampQ2` (blink), `PNL_StartLamp` (blink) | not Home → S90; Start↑ and `PNL_StopReleased` → S1 | — |
 | `S99_Alarm` | `PNL_LampQ1` (blink), `PNL_LampQ2` (blink), `PNL_ResetLamp` (blink) | Reset↑ and `PNL_EStopOk` → S91 | — |
 
-## 6. Diagrams
+## 6. Open questions
 
-### 6.1 Displacement-step diagram
+- [ ] **?1** Which PLC runs the station? Components, tag `?`: no label read yet. Assumed: PLC
+  connection 1 (PNL2) is input/output byte 0 and PLC connection 2 (XMA2) is byte 1.
+- [ ] **?2** Where is the emergency stop 0S5 wired, and what does it cut in hardware (outputs, air)?
+  I/O list, address `?`. Assumed: nothing until answered; the station stays in `S90_HomingRequired`.
+- [ ] **?3** Which valve type is the gripper valve 2V1? Pneumatics, `?`. Assumed: with its coils off
+  the vacuum is not held.
+- [ ] **?4** Which terminal does the IR receiver 4S1 connect to, and does it read 1 with the beam
+  received? Request: "the sorter returns availability signal, when it can take in new parts".
+  Assumed: 1 = sorter ready; a broken beam or wire reads 0, so the station waits in
+  `S5_WaitNextReady`.
+- [ ] **?5** Does the station also send the sorter a signal over the IR link, such as "part
+  placed", or only receive? Request as ?4. Assumed: receive only.
+- [ ] **?6** Can the empty swivel stand at dropdown (Home) while the sorter's infeed is busy? No
+  source. Assumed: yes; only a swivel carrying a part waits for `LNK_NextReady`.
+
+## 7. Diagrams
+
+### 7.1 Displacement-step diagram
 
 Actuator positions and part location at the end of each step of a normal cycle. Bold marks a change.
 
-| | S0 | S1 | S2 | S3 | S4 | S5 | S6 | S7 |
-|---|---|---|---|---|---|---|---|---|
-| 1A1 Magazine cylinder | extended | **retracted** | **extended** | extended | extended | extended | extended | extended |
-| 3A1 Swivel | dropdown | dropdown | dropdown | **pickup** | pickup | **dropdown** | dropdown | dropdown |
-| 2A1 Gripper vacuum | off | off | off | off | **on** | on | **off** | off |
-| Part | in magazine | in magazine | **at pickup** | at pickup | **gripped** | gripped | **dropped** | dropped |
-| Step ends on | Start↑ | `MAG_CylRetracted` | `MAG_CylExtended` | `SWV_AtPickup` | `GRP_PartGripped` | `SWV_AtDropdown` | 50 ms | StopReq, `PNL_Manual` or auto |
+| | S0 | S1 | S2 | S3 | S4 | S5 | S6 | S7 | S8 |
+|---|---|---|---|---|---|---|---|---|---|
+| 1A1 Magazine cylinder | extended | **retracted** | **extended** | extended | extended | extended | extended | extended | extended |
+| 3A1 Swivel | dropdown | dropdown | dropdown | **pickup** | pickup | pickup | **dropdown** | dropdown | dropdown |
+| 2A1 Gripper vacuum | off | off | off | off | **on** | on | on | **off** | off |
+| Part | in magazine | in magazine | **at pickup** | at pickup | **gripped** | gripped | gripped | **dropped** | dropped |
+| Step ends on | Start↑ | `MAG_CylRetracted` | `MAG_CylExtended` | `SWV_AtPickup` | `GRP_PartGripped` | `LNK_NextReady` | `SWV_AtDropdown` | 50 ms | StopReq, `PNL_Manual` or auto |
 
-### 6.2 Normal cycle sequence
+### 7.2 Normal cycle sequence
 
 One cycle in auto mode: each PLC command and the sensor that confirms it. `break` blocks are faults that end the cycle in S99.
 
@@ -108,6 +128,7 @@ sequenceDiagram
     participant MAG as Magazine 1A1
     participant SWV as Swivel 3A1
     participant GRP as Gripper 2A1
+    participant SRT as Colour sorter
 
     Note over PLC: S0_Ready (Home)
     OP->>PLC: PNL_StartButton ↑
@@ -118,7 +139,7 @@ sequenceDiagram
         Note over PLC: S2_MagPushOut
         PLC->>MAG: MAG_CylRetract = 0, spring extends
         MAG-->>PLC: MAG_CylExtended
-        MAG-->>PLC: MAG_PickupOccupied (else S8_MagEmpty)
+        MAG-->>PLC: MAG_PickupOccupied (else S9_MagEmpty)
     end
     Note over PLC: S3_SwvToPickup
     PLC->>SWV: SWV_ToPickup (only while MAG_CylExtended)
@@ -129,16 +150,18 @@ sequenceDiagram
         PLC->>PLC: S99_Alarm (part not gripped)
     end
     GRP-->>PLC: GRP_PartGripped
-    Note over PLC: S5_SwvToDropdown
+    Note over PLC: S5_WaitNextReady (holds the part at pickup)
+    SRT-->>PLC: LNK_NextReady (IR link)
+    Note over PLC: S6_SwvToDropdown
     PLC->>SWV: SWV_ToDropdown
-    break GRP_PartGripped drops during the turn
+    break GRP_PartGripped drops in S5 or S6
         PLC->>PLC: S99_Alarm (part lost)
     end
     SWV-->>PLC: SWV_AtDropdown
-    Note over PLC: S6_VacuumOff
+    Note over PLC: S7_VacuumOff
     PLC->>GRP: GRP_Release
-    Note over PLC: 50 ms, part dropped
-    Note over PLC: S7_CycleEnd
+    Note over PLC: 50 ms, part dropped onto the sorter
+    Note over PLC: S8_CycleEnd
     alt Auto and not StopReq
         PLC->>PLC: next cycle from S1
     else StopReq or PNL_Manual
@@ -146,7 +169,7 @@ sequenceDiagram
     end
 ```
 
-### 6.3 Step flowchart
+### 7.3 Step flowchart
 
 Every step and transition from section 5. Dashed arrows are step timeouts (3 s). Emergency stop from any step goes to S90.
 
@@ -165,22 +188,24 @@ flowchart TD
     S0 -->|"Start↑ and PNL_StopReleased,<br>not MAG_PickupOccupied"| S1
     S1[S1_MagRetract] -->|"MAG_CylRetracted"| S2[S2_MagPushOut]
     S2 -->|"MAG_CylExtended,<br>MAG_PickupOccupied"| S3[S3_SwvToPickup]
-    S2 -->|"MAG_CylExtended,<br>not MAG_PickupOccupied"| S8[S8_MagEmpty]
+    S2 -->|"MAG_CylExtended,<br>not MAG_PickupOccupied"| S9[S9_MagEmpty]
     S3 -->|"SWV_AtPickup"| S4[S4_VacuumOn]
-    S4 -->|"GRP_PartGripped"| S5[S5_SwvToDropdown]
-    S5 -->|"SWV_AtDropdown"| S6[S6_VacuumOff]
+    S4 -->|"GRP_PartGripped"| S5[S5_WaitNextReady]
+    S5 -->|"LNK_NextReady"| S6[S6_SwvToDropdown]
     S5 -->|"not GRP_PartGripped (part lost)"| S99
-    S6 -->|"50 ms"| S7[S7_CycleEnd]
-    S7 -->|"StopReq or PNL_Manual"| S0
-    S7 -->|"else (auto)"| S1
-    S8 -->|"not Home"| S90
-    S8 -->|"Start↑ and PNL_StopReleased"| S1
+    S6 -->|"SWV_AtDropdown"| S7[S7_VacuumOff]
+    S6 -->|"not GRP_PartGripped (part lost)"| S99
+    S7 -->|"50 ms"| S8[S8_CycleEnd]
+    S8 -->|"StopReq or PNL_Manual"| S0
+    S8 -->|"else (auto)"| S1
+    S9 -->|"not Home"| S90
+    S9 -->|"Start↑ and PNL_StopReleased"| S1
     S99[S99_Alarm] -->|"Reset↑ and PNL_EStopOk"| S91
 
-    S91 & S92 & S1 & S2 & S3 & S4 & S5 -.->|"timeout"| S99
+    S91 & S92 & S1 & S2 & S3 & S4 & S6 -.->|"timeout"| S99
 ```
 
-### 6.4 Operating modes
+### 7.4 Operating modes
 
 The same steps grouped into modes. Labels on arrows between modes name the step they leave from or enter at.
 
@@ -198,23 +223,24 @@ stateDiagram-v2
         S1_MagRetract --> S2_MagPushOut : MAG_CylRetracted
         S2_MagPushOut --> S3_SwvToPickup : MAG_CylExtended and MAG_PickupOccupied
         S3_SwvToPickup --> S4_VacuumOn : SWV_AtPickup
-        S4_VacuumOn --> S5_SwvToDropdown : GRP_PartGripped
-        S5_SwvToDropdown --> S6_VacuumOff : SWV_AtDropdown
-        S6_VacuumOff --> S7_CycleEnd : 50 ms
-        S7_CycleEnd --> S1_MagRetract : auto and not StopReq
+        S4_VacuumOn --> S5_WaitNextReady : GRP_PartGripped
+        S5_WaitNextReady --> S6_SwvToDropdown : LNK_NextReady
+        S6_SwvToDropdown --> S7_VacuumOff : SWV_AtDropdown
+        S7_VacuumOff --> S8_CycleEnd : 50 ms
+        S8_CycleEnd --> S1_MagRetract : auto and not StopReq
     }
 
     S0_Ready : Start lamp blinks
-    S8_MagEmpty : Q2 and Start lamp blink, refill magazine
+    S9_MagEmpty : Q2 and Start lamp blink, refill magazine
     S99_Alarm : Q1, Q2 and Reset lamp blink
 
     Homing --> S0_Ready : from S92, 50 ms and Home
     S0_Ready --> Cycle : Start↑ and PNL_StopReleased (to S3 if MAG_PickupOccupied, else S1)
-    Cycle --> S0_Ready : from S7, StopReq or PNL_Manual
-    Cycle --> S8_MagEmpty : from S2, no part at pickup
-    S8_MagEmpty --> Cycle : Start↑ and PNL_StopReleased (to S1)
+    Cycle --> S0_Ready : from S8, StopReq or PNL_Manual
+    Cycle --> S9_MagEmpty : from S2, no part at pickup
+    S9_MagEmpty --> Cycle : Start↑ and PNL_StopReleased (to S1)
     S0_Ready --> Homing : not Home (to S90)
-    S8_MagEmpty --> Homing : not Home (to S90)
+    S9_MagEmpty --> Homing : not Home (to S90)
     Cycle --> S99_Alarm : timeout, part not gripped, part lost
     Homing --> S99_Alarm : timeout
     S99_Alarm --> Homing : Reset↑ and PNL_EStopOk (to S91)

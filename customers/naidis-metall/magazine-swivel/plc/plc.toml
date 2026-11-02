@@ -1,8 +1,13 @@
 # Build targets: the sources of each are concatenated in this order into build/<target>.st
-spec = "../spec.md"
+spec = "../magazine-swivel.spec.md"
 
 [targets.sim]
 sources = ["src/station.st", "src/plant_sim.st", "targets/sim.st"]
 
 [targets.hw]
 sources = ["src/station.st", "targets/hw.st"]
+
+# Siemens S7-1200/1500 port (s7/) in simulation: the SCL block, translated for matiec, in place of
+# src/station.st; plant model, I/O map and tests as the sim target
+[targets.sim-s7]
+sources = ["s7/MagazineSwivel.scl", "s7/sim_station.st", "src/plant_sim.st", "targets/sim.st"]

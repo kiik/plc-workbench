@@ -1,12 +1,12 @@
 # Spec guide
 
-How to write a machine spec: one Markdown file per machine, `customers/<customer>/<machine>/spec.md`;
-a machine is what one PLC controls, and one with several stations has one `<station>.md` per
-station instead. The spec is kept current for as long as the machine runs. Drawings, labels and
-notes it is taken from go in `sources/` next to it. The program that implements it is `plc/`
-([PLC guide](plc-guide.md)); each project on the machine has its plan in
-`projects/<YYYY-MM-DD>-<project>/` ([plan guide](plan-guide.md)).
-Example: [`magazine-swivel`](../customers/naidis-metall/magazine-swivel/spec.md).
+How to write a machine spec: one Markdown file per machine,
+`customers/<customer>/<machine>/<machine>.spec.md`; a machine is what one PLC controls, and one
+with several stations has one `<station>.spec.md` per station instead. The spec is kept current
+for as long as the machine runs. Drawings, labels and notes it is taken from go in `sources/` next
+to it. The program that implements it is `plc/` ([PLC guide](plc-guide.md)); each project on the
+machine has its plan in `projects/<YYYY-MM-DD>-<project>/` ([plan guide](plan-guide.md)).
+Example: [`magazine-swivel`](../customers/naidis-metall/magazine-swivel/magazine-swivel.spec.md).
 Scope: digital I/O and one step sequence per station.
 
 ## Rules
@@ -35,6 +35,7 @@ Each section uses only names defined in the sections above it.
 | 4 | I/O list | One row per signal |
 | 5 | Control | Rules for every step, interlocks, step table |
 | 6 | Open questions | `- [ ] **?n** …` |
+| 7 | Diagrams | Optional views of section 5 (displacement-step, sequence, step flowchart, modes); changed with it |
 
 Title: `# <Station name> (<local name>)`, then a status line: `Status: draft`,
 `Status: reviewed <date> <name>` or `Status: commissioned <date> <name>`. A spec with open
@@ -66,11 +67,17 @@ questions or a `?` is a draft.
 | `LFT` | Lift |
 | `PRS` | Press |
 | `SRT` | Sorter |
+| `LNK` | Line link: signals to and from the neighbouring stations of a line |
 
 Use these codes; add a new three-letter code here before using it in a spec. A second unit of the
 same kind in one station replaces the last letter with a digit: `CNV`, `CN2`.
 
 ### Tags
+
+Tags name signals and actuators for PLC programming: the I/O list, the step table and the program.
+Cabinet and wiring items (PLC, terminals, protection, cables) carry IEC 81346 reference
+designations instead, mapped to these tags in the electrical spec
+([electrical guide](electrical-guide.md)).
 
 | Part | Meaning |
 |---|---|

@@ -18,7 +18,8 @@ tools/openplc/openplc.py test  magazine-swivel
 tools/openplc/openplc.py down
 ```
 
-`-t` picks the target (default `sim`). Without `-p`, `read`, `write`, `press` and `watch` take
+`-t` picks the target (default `sim`). A `.scl` source (a Siemens S7 port) is translated to IEC
+ST for matiec as it is built; see the [PLC guide](../../docs/plc-guide.md). Without `-p`, `read`, `write`, `press` and `watch` take
 addresses (`%QX1.0`, `%QW0`). `--json` prints one JSON object per command and one per line for
 `watch`, for scripts and agents; an error prints `{"error": …}` and exits 1.
 

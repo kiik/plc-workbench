@@ -1,0 +1,174 @@
+FUNCTION_BLOCK "MagazineSwivel"
+TITLE = Magazine and swivel station: step sequence
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+// Spec: ../../magazine-swivel.spec.md, section 5. Siemens S7-1200/1500 port of ../src/station.st: steps are
+// Int constants valued like the step (S90 = 90), I/O symbols are the block's parameters.
+
+   VAR_INPUT
+      PNL_StartButton : Bool;
+      PNL_StopReleased : Bool;
+      PNL_Manual : Bool;
+      PNL_ResetButton : Bool;
+      PNL_EStopOk : Bool;
+      MAG_CylExtended : Bool;
+      MAG_CylRetracted : Bool;
+      GRP_PartGripped : Bool;
+      SWV_AtPickup : Bool;
+      SWV_AtDropdown : Bool;
+      MAG_PickupOccupied : Bool;
+      LNK_NextReady : Bool;
+   END_VAR
+
+   VAR_OUTPUT
+      PNL_StartLamp : Bool;
+      PNL_ResetLamp : Bool;
+      PNL_LampQ1 : Bool;
+      PNL_LampQ2 : Bool;
+      MAG_CylRetract : Bool;
+      GRP_Grip : Bool;
+      GRP_Release : Bool;
+      SWV_ToPickup : Bool;
+      SWV_ToDropdown : Bool;
+      StepNo : Int;   // the current step, for HMI
+   END_VAR
+
+   VAR
+      CurStep : Int := 90;
+      LastStep : Int := 90;
+      StepTimer : TON_TIME;
+      StepTime : Time;
+      FirstScan : Bool := TRUE;   // also set by OB100, Main.scl
+      StartTrig : R_TRIG;
+      ResetTrig : R_TRIG;
+      StartP : Bool;
+      ResetP : Bool;
+      BlinkTimer : TON_TIME;
+      Blink1Hz : Bool;
+      Home : Bool;
+      StopReq : Bool;
+   END_VAR
+
+   VAR CONSTANT
+      S0_Ready : Int := 0;
+      S1_MagRetract : Int := 1;
+      S2_MagPushOut : Int := 2;
+      S3_SwvToPickup : Int := 3;
+      S4_VacuumOn : Int := 4;
+      S5_WaitNextReady : Int := 5;
+      S6_SwvToDropdown : Int := 6;
+      S7_VacuumOff : Int := 7;
+      S8_CycleEnd : Int := 8;
+      S9_MagEmpty : Int := 9;
+      S90_HomingRequired : Int := 90;
+      S91_HomeSwivel : Int := 91;
+      S92_HomeVacuumOff : Int := 92;
+      S99_Alarm : Int := 99;
+   END_VAR
+
+BEGIN
+   #StepTimer(IN := #CurStep = #LastStep, PT := T#24H);   // restarts on every step change
+   #StepTime := #StepTimer.ET;
+   #LastStep := #CurStep;
+
+   #BlinkTimer(IN := NOT #BlinkTimer.Q, PT := T#500MS);
+   IF #BlinkTimer.Q THEN #Blink1Hz := NOT #Blink1Hz; END_IF;
+
+   #StartTrig(CLK := #PNL_StartButton);
+   #StartP := #StartTrig.Q;
+   #ResetTrig(CLK := #PNL_ResetButton);
+   #ResetP := #ResetTrig.Q;
+
+   #Home := #MAG_CylExtended AND #SWV_AtDropdown;
+
+   IF #CurStep = #S0_Ready OR #CurStep = #S9_MagEmpty THEN
+      #StopReq := FALSE;
+   ELSIF NOT #PNL_StopReleased THEN
+      #StopReq := TRUE;
+   END_IF;
+
+   IF #FirstScan THEN
+      IF #Home THEN #CurStep := #S0_Ready; ELSE #CurStep := #S90_HomingRequired; END_IF;
+   ELSIF NOT #PNL_EStopOk THEN
+      #CurStep := #S90_HomingRequired;
+   ELSE
+      CASE #CurStep OF
+      #S90_HomingRequired:
+         IF #ResetP AND #PNL_EStopOk THEN #CurStep := #S91_HomeSwivel; END_IF;
+
+      #S91_HomeSwivel:
+         IF #SWV_AtDropdown THEN #CurStep := #S92_HomeVacuumOff;
+         ELSIF #StepTime >= T#3S THEN #CurStep := #S99_Alarm; END_IF;
+
+      #S92_HomeVacuumOff:
+         IF #StepTime >= T#50MS AND #Home THEN #CurStep := #S0_Ready;
+         ELSIF #StepTime >= T#3S THEN #CurStep := #S99_Alarm; END_IF;
+
+      #S0_Ready:
+         IF NOT #Home THEN #CurStep := #S90_HomingRequired;
+         ELSIF #StartP AND #PNL_StopReleased THEN
+            IF #MAG_PickupOccupied THEN #CurStep := #S3_SwvToPickup; ELSE #CurStep := #S1_MagRetract; END_IF;
+         END_IF;
+
+      #S1_MagRetract:
+         IF #MAG_CylRetracted THEN #CurStep := #S2_MagPushOut;
+         ELSIF #StepTime >= T#3S THEN #CurStep := #S99_Alarm; END_IF;
+
+      #S2_MagPushOut:
+         IF #MAG_CylExtended THEN
+            IF #MAG_PickupOccupied THEN #CurStep := #S3_SwvToPickup; ELSE #CurStep := #S9_MagEmpty; END_IF;
+         ELSIF #StepTime >= T#3S THEN #CurStep := #S99_Alarm; END_IF;
+
+      #S3_SwvToPickup:
+         IF #SWV_AtPickup THEN #CurStep := #S4_VacuumOn;
+         ELSIF #StepTime >= T#3S THEN #CurStep := #S99_Alarm; END_IF;
+
+      #S4_VacuumOn:
+         IF #GRP_PartGripped THEN #CurStep := #S5_WaitNextReady;
+         ELSIF #StepTime >= T#3S THEN #CurStep := #S99_Alarm; END_IF;   // part not gripped
+
+      #S5_WaitNextReady:
+         IF NOT #GRP_PartGripped THEN #CurStep := #S99_Alarm;           // part lost
+         ELSIF #LNK_NextReady THEN #CurStep := #S6_SwvToDropdown; END_IF;
+
+      #S6_SwvToDropdown:
+         IF NOT #GRP_PartGripped THEN #CurStep := #S99_Alarm;           // part lost
+         ELSIF #SWV_AtDropdown THEN #CurStep := #S7_VacuumOff;
+         ELSIF #StepTime >= T#3S THEN #CurStep := #S99_Alarm; END_IF;
+
+      #S7_VacuumOff:
+         IF #StepTime >= T#50MS THEN #CurStep := #S8_CycleEnd; END_IF;
+
+      #S8_CycleEnd:
+         IF #StopReq OR #PNL_Manual THEN #CurStep := #S0_Ready; ELSE #CurStep := #S1_MagRetract; END_IF;
+
+      #S9_MagEmpty:
+         IF NOT #Home THEN #CurStep := #S90_HomingRequired;
+         ELSIF #StartP AND #PNL_StopReleased THEN #CurStep := #S1_MagRetract; END_IF;
+
+      #S99_Alarm:
+         IF #ResetP AND #PNL_EStopOk THEN #CurStep := #S91_HomeSwivel; END_IF;
+      END_CASE;
+   END_IF;
+
+   // one line per output; never assigned anywhere else
+   #MAG_CylRetract := #CurStep = #S1_MagRetract AND #SWV_AtDropdown;
+   #GRP_Grip := #CurStep = #S4_VacuumOn OR #CurStep = #S5_WaitNextReady OR #CurStep = #S6_SwvToDropdown;
+   #GRP_Release := #CurStep = #S92_HomeVacuumOff OR #CurStep = #S7_VacuumOff;
+   #SWV_ToPickup := (#CurStep = #S3_SwvToPickup OR #CurStep = #S4_VacuumOn OR #CurStep = #S5_WaitNextReady)
+      AND #MAG_CylExtended;
+   #SWV_ToDropdown := #CurStep = #S91_HomeSwivel OR #CurStep = #S92_HomeVacuumOff
+      OR #CurStep = #S6_SwvToDropdown OR #CurStep = #S7_VacuumOff;
+   #PNL_StartLamp := (#CurStep = #S0_Ready OR #CurStep = #S9_MagEmpty) AND #Blink1Hz
+      OR #CurStep = #S1_MagRetract OR #CurStep = #S2_MagPushOut OR #CurStep = #S3_SwvToPickup
+      OR #CurStep = #S4_VacuumOn OR #CurStep = #S5_WaitNextReady OR #CurStep = #S6_SwvToDropdown
+      OR #CurStep = #S7_VacuumOff OR #CurStep = #S8_CycleEnd;
+   #PNL_ResetLamp := #CurStep = #S90_HomingRequired AND (#Blink1Hz OR NOT #PNL_EStopOk)
+      OR #CurStep = #S91_HomeSwivel OR #CurStep = #S92_HomeVacuumOff
+      OR #CurStep = #S99_Alarm AND #Blink1Hz;
+   #PNL_LampQ1 := #PNL_ResetLamp;   // same steps and modifiers as the reset lamp
+   #PNL_LampQ2 := #PNL_ResetLamp OR #CurStep = #S9_MagEmpty AND #Blink1Hz;
+
+   #StepNo := #CurStep;
+   #FirstScan := FALSE;
+END_FUNCTION_BLOCK

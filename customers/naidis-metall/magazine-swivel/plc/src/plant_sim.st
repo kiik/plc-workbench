@@ -20,10 +20,13 @@ PROGRAM PlantSim
         SIM_PartsLost : INT;
         SIM_VacuumFault : BOOL;
         SIM_SwivelJam : BOOL;
+        SIM_SorterBlocked : BOOL;
+        LNK_NextReady : BOOL;
     END_VAR
     VAR CONSTANT
         MagStroke : INT := 40;    (* 0 = extended, MagStroke = retracted *)
         SwvStroke : INT := 50;    (* 0 = at dropdown, SwvStroke = at pickup *)
+        SortScans : INT := 100;   (* the sorter takes a delivered part away in 1 s *)
     END_VAR
     VAR
         MagPos : INT := 0;
@@ -33,6 +36,7 @@ PROGRAM PlantSim
         PartOnGripper : BOOL;
         Vacuum : BOOL;
         VacuumBuildUp : TON;
+        SortCount : INT := 0;     (* > 0 while the sorter is busy with the last part *)
     END_VAR
 
     (* 1A1 magazine cylinder: 5/2 single solenoid, coil on retracts, spring extends *)
@@ -71,8 +75,11 @@ PROGRAM PlantSim
     END_IF;
     IF PartOnGripper AND (NOT Vacuum OR SIM_VacuumFault) THEN
         PartOnGripper := FALSE;
-        IF SwvPos = 0 THEN
+        IF SwvPos = 0 AND LNK_NextReady THEN
             SIM_PartsDelivered := SIM_PartsDelivered + 1;
+            SortCount := SortScans;
+        ELSIF SwvPos = 0 THEN
+            SIM_PartsLost := SIM_PartsLost + 1;      (* dropped onto a sorter that was not ready *)
         ELSIF SwvPos = SwvStroke THEN
             PartAtPickup := TRUE;
         ELSE
@@ -81,10 +88,14 @@ PROGRAM PlantSim
     END_IF;
     VacuumBuildUp(IN := Vacuum AND PartOnGripper, PT := T#100MS);
 
+    (* colour sorter downstream: ready over the IR link unless busy or blocked *)
+    IF SortCount > 0 THEN SortCount := SortCount - 1; END_IF;
+
     MAG_CylExtended := MagPos = 0;
     MAG_CylRetracted := MagPos = MagStroke;
     MAG_PickupOccupied := PartAtPickup;
     SWV_AtDropdown := SwvPos = 0;
     SWV_AtPickup := SwvPos = SwvStroke;
     GRP_PartGripped := VacuumBuildUp.Q;
+    LNK_NextReady := SortCount = 0 AND NOT SIM_SorterBlocked;
 END_PROGRAM

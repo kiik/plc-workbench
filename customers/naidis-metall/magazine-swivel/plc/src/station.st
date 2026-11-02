@@ -1,5 +1,5 @@
 (* Magazine and swivel station: step sequence.
-   Spec: ../spec.md, section 5.
+   Spec: ../magazine-swivel.spec.md, section 5.
    I/O symbols are globals declared by the target (targets/*.st). *)
 
 TYPE
@@ -9,10 +9,11 @@ TYPE
         S2_MagPushOut,
         S3_SwvToPickup,
         S4_VacuumOn,
-        S5_SwvToDropdown,
-        S6_VacuumOff,
-        S7_CycleEnd,
-        S8_MagEmpty,
+        S5_WaitNextReady,
+        S6_SwvToDropdown,
+        S7_VacuumOff,
+        S8_CycleEnd,
+        S9_MagEmpty,
         S90_HomingRequired,
         S91_HomeSwivel,
         S92_HomeVacuumOff,
@@ -32,6 +33,7 @@ PROGRAM Station
         SWV_AtPickup : BOOL;
         SWV_AtDropdown : BOOL;
         MAG_PickupOccupied : BOOL;
+        LNK_NextReady : BOOL;
         PNL_StartLamp : BOOL;
         PNL_ResetLamp : BOOL;
         PNL_LampQ1 : BOOL;
@@ -73,7 +75,7 @@ PROGRAM Station
 
     Home := MAG_CylExtended AND SWV_AtDropdown;
 
-    IF CurStep = S0_Ready OR CurStep = S8_MagEmpty THEN
+    IF CurStep = S0_Ready OR CurStep = S9_MagEmpty THEN
         StopReq := FALSE;
     ELSIF NOT PNL_StopReleased THEN
         StopReq := TRUE;
@@ -108,7 +110,7 @@ PROGRAM Station
 
         S2_MagPushOut:
             IF MAG_CylExtended THEN
-                IF MAG_PickupOccupied THEN CurStep := S3_SwvToPickup; ELSE CurStep := S8_MagEmpty; END_IF;
+                IF MAG_PickupOccupied THEN CurStep := S3_SwvToPickup; ELSE CurStep := S9_MagEmpty; END_IF;
             ELSIF StepTime >= T#3S THEN CurStep := S99_Alarm; END_IF;
 
         S3_SwvToPickup:
@@ -116,21 +118,25 @@ PROGRAM Station
             ELSIF StepTime >= T#3S THEN CurStep := S99_Alarm; END_IF;
 
         S4_VacuumOn:
-            IF GRP_PartGripped THEN CurStep := S5_SwvToDropdown;
+            IF GRP_PartGripped THEN CurStep := S5_WaitNextReady;
             ELSIF StepTime >= T#3S THEN CurStep := S99_Alarm; END_IF;  (* part not gripped *)
 
-        S5_SwvToDropdown:
+        S5_WaitNextReady:
             IF NOT GRP_PartGripped THEN CurStep := S99_Alarm;          (* part lost *)
-            ELSIF SWV_AtDropdown THEN CurStep := S6_VacuumOff;
+            ELSIF LNK_NextReady THEN CurStep := S6_SwvToDropdown; END_IF;
+
+        S6_SwvToDropdown:
+            IF NOT GRP_PartGripped THEN CurStep := S99_Alarm;          (* part lost *)
+            ELSIF SWV_AtDropdown THEN CurStep := S7_VacuumOff;
             ELSIF StepTime >= T#3S THEN CurStep := S99_Alarm; END_IF;
 
-        S6_VacuumOff:
-            IF StepTime >= T#50MS THEN CurStep := S7_CycleEnd; END_IF;
+        S7_VacuumOff:
+            IF StepTime >= T#50MS THEN CurStep := S8_CycleEnd; END_IF;
 
-        S7_CycleEnd:
+        S8_CycleEnd:
             IF StopReq OR PNL_Manual THEN CurStep := S0_Ready; ELSE CurStep := S1_MagRetract; END_IF;
 
-        S8_MagEmpty:
+        S9_MagEmpty:
             IF NOT Home THEN CurStep := S90_HomingRequired;
             ELSIF StartP AND PNL_StopReleased THEN CurStep := S1_MagRetract; END_IF;
 
@@ -141,20 +147,21 @@ PROGRAM Station
 
     (* one line per output; never assigned anywhere else *)
     MAG_CylRetract := CurStep = S1_MagRetract AND SWV_AtDropdown;
-    GRP_Grip := CurStep = S4_VacuumOn OR CurStep = S5_SwvToDropdown;
-    GRP_Release := CurStep = S92_HomeVacuumOff OR CurStep = S6_VacuumOff;
-    SWV_ToPickup := (CurStep = S3_SwvToPickup OR CurStep = S4_VacuumOn) AND MAG_CylExtended;
+    GRP_Grip := CurStep = S4_VacuumOn OR CurStep = S5_WaitNextReady OR CurStep = S6_SwvToDropdown;
+    GRP_Release := CurStep = S92_HomeVacuumOff OR CurStep = S7_VacuumOff;
+    SWV_ToPickup := (CurStep = S3_SwvToPickup OR CurStep = S4_VacuumOn OR CurStep = S5_WaitNextReady)
+        AND MAG_CylExtended;
     SWV_ToDropdown := CurStep = S91_HomeSwivel OR CurStep = S92_HomeVacuumOff
-        OR CurStep = S5_SwvToDropdown OR CurStep = S6_VacuumOff;
-    PNL_StartLamp := (CurStep = S0_Ready OR CurStep = S8_MagEmpty) AND Blink1Hz
+        OR CurStep = S6_SwvToDropdown OR CurStep = S7_VacuumOff;
+    PNL_StartLamp := (CurStep = S0_Ready OR CurStep = S9_MagEmpty) AND Blink1Hz
         OR CurStep = S1_MagRetract OR CurStep = S2_MagPushOut OR CurStep = S3_SwvToPickup
-        OR CurStep = S4_VacuumOn OR CurStep = S5_SwvToDropdown OR CurStep = S6_VacuumOff
-        OR CurStep = S7_CycleEnd;
+        OR CurStep = S4_VacuumOn OR CurStep = S5_WaitNextReady OR CurStep = S6_SwvToDropdown
+        OR CurStep = S7_VacuumOff OR CurStep = S8_CycleEnd;
     PNL_ResetLamp := CurStep = S90_HomingRequired AND (Blink1Hz OR NOT PNL_EStopOk)
         OR CurStep = S91_HomeSwivel OR CurStep = S92_HomeVacuumOff
         OR CurStep = S99_Alarm AND Blink1Hz;
     PNL_LampQ1 := PNL_ResetLamp;   (* same steps and modifiers as the reset lamp *)
-    PNL_LampQ2 := PNL_ResetLamp OR CurStep = S8_MagEmpty AND Blink1Hz;
+    PNL_LampQ2 := PNL_ResetLamp OR CurStep = S9_MagEmpty AND Blink1Hz;
 
     CASE CurStep OF
     S0_Ready: StepNo := 0;
@@ -162,10 +169,11 @@ PROGRAM Station
     S2_MagPushOut: StepNo := 2;
     S3_SwvToPickup: StepNo := 3;
     S4_VacuumOn: StepNo := 4;
-    S5_SwvToDropdown: StepNo := 5;
-    S6_VacuumOff: StepNo := 6;
-    S7_CycleEnd: StepNo := 7;
-    S8_MagEmpty: StepNo := 8;
+    S5_WaitNextReady: StepNo := 5;
+    S6_SwvToDropdown: StepNo := 6;
+    S7_VacuumOff: StepNo := 7;
+    S8_CycleEnd: StepNo := 8;
+    S9_MagEmpty: StepNo := 9;
     S90_HomingRequired: StepNo := 90;
     S91_HomeSwivel: StepNo := 91;
     S92_HomeVacuumOff: StepNo := 92;

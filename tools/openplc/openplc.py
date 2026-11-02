@@ -65,11 +65,35 @@ def build(project, target):
         raise CliError(f"unknown target {target!r}; plc.toml has {', '.join(targets)}")
     parts = []
     for src in targets[target]["sources"]:
-        parts.append(f"(* source: {src} *)\n{(pdir / src).read_text()}")
+        text = (pdir / src).read_text()
+        if src.endswith(".scl"):
+            text = scl_to_iec(text)
+        parts.append(f"(* source: {src} *)\n{text}")
     out = pdir / "build" / f"{target}.st"
     out.parent.mkdir(exist_ok=True)
     out.write_text("\n".join(parts))
     return out
+
+
+SCL_HEADER = re.compile(r"^\s*(\{.*\}|TITLE\s*=.*|VERSION\s*:.*|BEGIN)\s*$\n?", re.M)
+SCL_CONSTANT = re.compile(r"^\s*(\w+)\s*:\s*\w+\s*:=\s*([^;]+);", re.M)
+
+
+def scl_to_iec(text):
+    """A Siemens SCL function block as IEC ST for matiec, so a sim target can run an S7 port.
+
+    Covers what an S7 port in plc/s7/ uses: block attributes, TITLE, VERSION and BEGIN lines,
+    `//` comments, `#` before local names, "quoted" block names, TON_TIME, and local constants
+    as CASE labels (matiec takes only literals there, so every `#Constant` becomes its value).
+    """
+    for block in re.findall(r"VAR CONSTANT(.*?)END_VAR", text, re.S):
+        for name, value in SCL_CONSTANT.findall(block):
+            text = re.sub(rf"#{name}\b", value.strip(), text)
+    text = SCL_HEADER.sub("", text)
+    text = re.sub(r"//(.*)$", r"(*\1 *)", text, flags=re.M)
+    text = re.sub(r"(?<!\w)#(?=[A-Za-z_])", "", text)   # #Local, not T#3S
+    text = re.sub(r'"(\w+)"', r"\1", text)
+    return re.sub(r"\bTON_TIME\b", "TON", text)
 
 
 LOCATED = re.compile(r"^\s*(\w+)\s+AT\s+(%[IQM][XW][\d.]+)\s*:\s*(\w+)", re.M)
@@ -254,6 +278,10 @@ class Io:
         self.modbus.write(kind, index, value)
 
     def press(self, name, ms=200):
+        """Release, press for ms, release. The leading release lasts a few scans, so a press right
+        after the button was let go still gives the program a 0 → 1 edge."""
+        self.write(name, 0)
+        time.sleep(0.05)
         self.write(name, 1)
         time.sleep(ms / 1000)
         self.write(name, 0)

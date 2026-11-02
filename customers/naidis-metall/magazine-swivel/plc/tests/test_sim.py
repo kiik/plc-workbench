@@ -11,13 +11,14 @@ import unittest
 import openplc
 
 PROJECT = os.environ.get("OPENPLC_PROJECT", "magazine-swivel")
+TARGET = os.environ.get("OPENPLC_TARGET", "sim")
 COILS = ["MAG_CylRetract", "GRP_Grip", "GRP_Release", "SWV_ToPickup", "SWV_ToDropdown"]
 
 
 class Station(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.io = openplc.Io(openplc.build(PROJECT, "sim"))
+        cls.io = openplc.Io(openplc.build(PROJECT, TARGET))
 
     @classmethod
     def tearDownClass(cls):
@@ -47,12 +48,12 @@ class Station(unittest.TestCase):
         return seen
 
     def setUp(self):
-        self.set(SIM_VacuumFault=0, SIM_SwivelJam=0, PNL_Manual=1, PNL_StopReleased=1,
+        self.set(SIM_VacuumFault=0, SIM_SwivelJam=0, SIM_SorterBlocked=0, PNL_Manual=1, PNL_StopReleased=1,
                  PNL_EStopOk=1, PNL_StartButton=0, PNL_ResetButton=0, SIM_PartsInMagazine=5)
-        self.wait_step(0, 8, 90, 99, timeout=10)
+        self.wait_step(0, 9, 90, 99, timeout=10)
         if self.get("StepNo") in (90, 99):
             self.io.press("PNL_ResetButton")
-        if self.get("StepNo") == 8:
+        if self.get("StepNo") == 9:
             self.io.press("PNL_StartButton")
         self.wait_step(0, timeout=10)
         self.set(SIM_PartsDelivered=0, SIM_PartsLost=0)
@@ -76,8 +77,9 @@ class Station(unittest.TestCase):
         self.set(PNL_Manual=0, SIM_PartsInMagazine=2)
         at_pickup = self.get("MAG_PickupOccupied")   # left there by an earlier test
         self.io.press("PNL_StartButton")
-        self.wait_step(8, timeout=15)
+        self.wait_step(9, timeout=15)
         self.assertEqual(self.get("SIM_PartsDelivered"), 2 + at_pickup)
+        self.assertEqual(self.get("SIM_PartsLost"), 0, "never dropped onto a busy sorter")
         self.assertEqual(self.values_seen("PNL_LampQ2", 1.5), {False, True}, "Q2 blinks")
 
     def test_stop_finishes_cycle(self):
@@ -90,9 +92,21 @@ class Station(unittest.TestCase):
         self.wait_step(0)
         self.assertEqual(self.get("SIM_PartsDelivered"), 1)
 
-    def test_part_lost_alarms(self):
+    def test_waits_for_next_ready(self):
+        self.set(SIM_SorterBlocked=1)
         self.io.press("PNL_StartButton")
         self.wait_step(5)
+        time.sleep(1.0)
+        self.assertEqual(self.get("StepNo"), 5, "holds the part at pickup")
+        self.assertTrue(self.get("SWV_AtPickup") and self.get("GRP_PartGripped"))
+        self.set(SIM_SorterBlocked=0)
+        self.wait_step(0)
+        self.assertEqual(self.get("SIM_PartsDelivered"), 1)
+        self.assertEqual(self.get("SIM_PartsLost"), 0)
+
+    def test_part_lost_alarms(self):
+        self.io.press("PNL_StartButton")
+        self.wait_step(6)
         self.set(SIM_VacuumFault=1)
         self.wait_step(99)
         self.assertEqual(self.get("SIM_PartsLost"), 1)

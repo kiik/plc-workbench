@@ -1,0 +1,50 @@
+DATA_BLOCK "MagazineSwivel_DB"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+NON_RETAIN
+"MagazineSwivel"
+
+BEGIN
+
+END_DATA_BLOCK
+
+ORGANIZATION_BLOCK "Startup"
+TITLE = "Complete restart"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+
+BEGIN
+   "MagazineSwivel_DB".FirstScan := TRUE;
+END_ORGANIZATION_BLOCK
+
+ORGANIZATION_BLOCK "Main"
+TITLE = "Main Program Sweep (Cycle)"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 0.1
+// The I/O map, as targets/hw.st. Assumed until the PLC is known (spec section 2): PLC connection 1
+// (PNL2) is byte 0, PLC connection 2 (XMA2) is byte 1, bit = terminal number. PNL2 is labeled
+// from the panel side: buttons on O, lamps on I.
+
+BEGIN
+   "MagazineSwivel_DB"(PNL_StartButton := %I0.0,       // 0S1 PNL2.O0
+                       PNL_StopReleased := %I0.1,      // 0S2 PNL2.O1, NC
+                       PNL_Manual := %I0.2,            // 0S3 PNL2.O2
+                       PNL_ResetButton := %I0.3,       // 0S4 PNL2.O3
+                       PNL_EStopOk := FALSE,           // 0S5 address ?: stays in S90 until wired
+                       MAG_CylExtended := %I1.1,       // 1S1 XMA2.I1
+                       MAG_CylRetracted := %I1.2,      // 1S2 XMA2.I2
+                       GRP_PartGripped := %I1.3,       // 2S1 XMA2.I3
+                       SWV_AtPickup := %I1.4,          // 3S1 XMA2.I4
+                       SWV_AtDropdown := %I1.5,        // 3S2 XMA2.I5
+                       MAG_PickupOccupied := %I1.6,    // 1S3 XMA2.I6
+                       LNK_NextReady := FALSE,         // 4S1 address ?: waits in S5 until wired
+                       PNL_StartLamp => %Q0.0,         // 0H1 PNL2.I0
+                       PNL_ResetLamp => %Q0.1,         // 0H2 PNL2.I1
+                       PNL_LampQ1 => %Q0.2,            // 0H3 PNL2.I2
+                       PNL_LampQ2 => %Q0.3,            // 0H4 PNL2.I3
+                       MAG_CylRetract => %Q1.0,        // 1Y1A XMA2.O0
+                       GRP_Grip => %Q1.1,              // 2Y1A XMA2.O1
+                       GRP_Release => %Q1.2,           // 2Y1B XMA2.O2
+                       SWV_ToPickup => %Q1.3,          // 3Y1A XMA2.O3
+                       SWV_ToDropdown => %Q1.4);       // 3Y1B XMA2.O4
+END_ORGANIZATION_BLOCK
